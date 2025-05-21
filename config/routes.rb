@@ -14,6 +14,7 @@ Rails.application.routes.draw do
         collection do
           get :empty
           get :dummy
+          get :test_api
         end
       end
     end
