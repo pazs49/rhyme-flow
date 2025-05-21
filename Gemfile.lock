@@ -359,6 +359,7 @@ DEPENDENCIES
   debug
   devise (~> 4.9)
   devise-api (~> 0.2.0)
+  dotenv
   kamal
   pg (~> 1.1)
   puma (>= 5.0)
