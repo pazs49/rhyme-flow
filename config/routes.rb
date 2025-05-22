@@ -17,6 +17,7 @@ Rails.application.routes.draw do
           get :test_api
           post :generate_lyric
         end
+        resources :comments, only: [:index, :show, :create, :update, :destroy]
       end
     end
   end
