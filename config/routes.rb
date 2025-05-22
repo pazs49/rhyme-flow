@@ -16,6 +16,7 @@ Rails.application.routes.draw do
           get :dummy
           get :test_api
         end
+        resources :comments, only: [:index, :show, :create, :update, :destroy]
       end
     end
   end

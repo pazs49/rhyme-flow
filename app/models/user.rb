@@ -7,4 +7,5 @@ class User < ApplicationRecord
   has_many :lyrics, dependent: :destroy
   # has_many :likes, dependent: :destroy
   has_many :liked_lyrics, through: :likes, source: :lyric
+  has_many :comments, dependent: :destroy
 end
