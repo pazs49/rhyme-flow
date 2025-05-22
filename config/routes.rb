@@ -15,6 +15,7 @@ Rails.application.routes.draw do
           get :empty
           get :dummy
           get :test_api
+          post :generate_lyric
         end
       end
     end
