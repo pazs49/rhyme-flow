@@ -1,4 +1,7 @@
 class Api::V1::CommentsController < ApplicationController
+  before_action :authenticate_devise_api_token!
+  before_action :set_current_user
+
   before_action :set_lyric
   before_action :set_comment, only: [:show, :update, :destroy]
 
@@ -13,7 +16,7 @@ class Api::V1::CommentsController < ApplicationController
 
   def create
     @comment = @lyric.comments.build(comment_params)
-    @comment.user_id = current_user.id if defined?(current_user) # Optional
+    @comment.user_id = @current_user.id
 
     if @comment.save
       render json: @comment, status: :created
@@ -46,6 +49,10 @@ class Api::V1::CommentsController < ApplicationController
   end
 
   def comment_params
-    params.require(:comment).permit(:body, :user_id)
+    params.require(:comment).permit(:body)
+  end
+
+  def set_current_user
+    @current_user = current_devise_api_token.resource_owner
   end
 end
