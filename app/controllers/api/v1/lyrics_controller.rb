@@ -104,7 +104,43 @@ class Api::V1::LyricsController < ApplicationController
     end
   end
 
+  def show
+    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
+    if @lyric
+      render json: @lyric
+    else
+      render json: { error: "Lyric not found" }, status: :not_found
+    end
+  end
+
+  def update
+    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
+    if @lyric
+      if @lyric.update(lyric_params)
+        render json: @lyric
+      else
+        render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
+      end
+    else
+      render json: { error: "Lyric not found" }, status: :not_found
+    end
+  end
+
+  def destroy
+    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
+    if @lyric
+      @lyric.destroy
+      render json: { message: "Lyric deleted successfully" }
+    else
+      render json: { error: "Lyric not found" }, status: :not_found
+    end
+  end
+
   private
+
+  def lyric_params
+    params.require(:lyric).permit(:title, :genre, :mood, :body, :public, :user_specific_prompts)
+  end
 
   def set_current_user
     @current_user = current_devise_api_token.resource_owner
