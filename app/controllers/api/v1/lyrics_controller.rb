@@ -1,39 +1,34 @@
-require "net/http"
-require "uri"
-require "json"
-
 class Api::V1::LyricsController < ApplicationController
   before_action :authenticate_devise_api_token!
   before_action :set_current_user
+  before_action :set_lyric, only: [ :show, :update, :destroy ]
 
   def index
-    @lyrics = Lyric.all
-    render json: @lyrics
+    render json: Lyric.all
   end
 
-  def user_lyrics
-    @lyrics = Lyric.where(user_id: @current_user.id).includes(:user, :likers, comments: :user)
-    render json: @lyrics.as_json(
-      include: {
-        user: { only: [ :id, :email ] },
-        likers: { only: [ :id, :email ] },
-        comments: {
-          only: [ :id, :body, :created_at ],
-          include: {
-            user: { only: [ :id, :email ] }
-          }
-        }
-      }
-    )
-  end
-
-  def empty
-    @lyric = Lyric.new
+  def show
     render json: @lyric
   end
 
+  def user_lyrics
+    lyrics = @current_user.lyrics.includes(:user, :likers, comments: :user)
+    render json: lyrics.as_json(include: {
+      user: { only: [ :id, :email ] },
+      likers: { only: [ :id, :email ] },
+      comments: {
+        only: [ :id, :body, :created_at ],
+        include: { user: { only: [ :id, :email ] } }
+      }
+    })
+  end
+
+  def empty
+    render json: Lyric.new
+  end
+
   def dummy
-    dummy_lyrics = {
+    render json: {
       title: "Love in the Rain",
       body: "Walking alone in the pouring rain\nThinking of you again\nYour smile, your touch, your sweet refrain\nKeeps echoing in my brain",
       genre: "Pop",
@@ -42,74 +37,23 @@ class Api::V1::LyricsController < ApplicationController
       user_id: 1,
       user_specific_prompts: "Write a love song inspired by rainy nights."
     }
-
-    render json: dummy_lyrics
-  end
-
-  def test_api
-    url = ENV["DEEPSEEK_BASE_URL"] + "/chat/completions"
-    uri = URI(url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
-
-    headers = {
-      "Content-Type" => "application/json",
-      "Authorization" => "Bearer #{ENV["DEEPSEEK_API_KEY"]}"
-    }
-
-    body = {
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: "You are a helpful songwriter." },
-        { role: "user", content: "Please generate lyrics for a song about love." }
-      ],
-      stream: false
-    }
-
-    response = http.post(uri.path, body.to_json, headers)
-    render json: response.body
   end
 
   def generate_lyric
-    url = ENV["DEEPSEEK_BASE_URL"] + "/chat/completions"
-    uri = URI(url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
+    service = LyricGeneratorService.new(
+      user_prompt: formatted_user_prompt,
+      system_prompt: system_prompt
+    )
 
-    headers = {
-      "Content-Type" => "application/json",
-      "Authorization" => "Bearer #{ENV["DEEPSEEK_API_KEY"]}"
-    }
+    generated = service.generate
 
-    user_prompt = "Title: #{params[:lyric][:title]}\nGenre: #{params[:lyric][:genre]}\nMood: #{params[:lyric][:mood]}\nUser Specific Prompts: #{params[:lyric][:user_specific_prompts]}"
-
-    messages = [
-      { role: "system", content: "You are a helpful songwriting assistant. When a user provides details, you generate lyrics and return only a JSON object with the keys: title, genre, mood, and lyrics. Do not return anything else and don't change the title, mood, or genre! If there are minor wrong spelling, correct them but never change the title! You can capitalize the first letter of each word of the title but never change the title!" },
-      { role: "user", content: user_prompt }
-    ]
-
-    body = {
-      model: "deepseek-chat",
-      messages: messages,
-      stream: false
-    }
-
-    response = http.post(uri.path, body.to_json, headers)
-    parsed_response = JSON.parse(response.body)
-
-    if parsed_response["choices"].present?
-      generated_lyrics = parsed_response["choices"][0]["message"]["content"]
-      generated_lyrics = generated_lyrics.gsub(/\A```json\s*|\s*```\z/, "")
-      generated_lyrics = JSON.parse(generated_lyrics)
-      # binding.pry
-      @lyric = Lyric.new(
-        # lyric_params.merge(body: generated_lyrics, user_id: @current_user.id)
-        title: generated_lyrics["title"],
-        body: generated_lyrics["lyrics"],
-        genre: generated_lyrics["genre"],
-        mood: generated_lyrics["mood"],
-        public: true,
-        user_id: @current_user.id
+    if generated
+      @lyric = @current_user.lyrics.new(
+        title: generated["title"],
+        body: generated["lyrics"],
+        genre: generated["genre"],
+        mood: generated["mood"],
+        public: true
       )
 
       if @lyric.save
@@ -122,45 +66,47 @@ class Api::V1::LyricsController < ApplicationController
     end
   end
 
-  def show
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
+  def update
+    if @lyric.update(lyric_params)
       render json: @lyric
     else
-      render json: { error: "Lyric not found" }, status: :not_found
-    end
-  end
-
-  def update
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
-      if @lyric.update(lyric_params)
-        render json: @lyric
-      else
-        render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
-      end
-    else
-      render json: { error: "Lyric not found" }, status: :not_found
+      render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   def destroy
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
-      @lyric.destroy
-      render json: { message: "Lyric deleted successfully" }
-    else
-      render json: { error: "Lyric not found" }, status: :not_found
-    end
+    @lyric.destroy
+    render json: { message: "Lyric deleted successfully" }
   end
 
   private
+
+  def set_current_user
+    @current_user = current_devise_api_token.resource_owner
+  end
+
+  def set_lyric
+    @lyric = @current_user.lyrics.find_by(id: params[:id])
+    render json: { error: "Lyric not found" }, status: :not_found unless @lyric
+  end
 
   def lyric_params
     params.require(:lyric).permit(:title, :genre, :mood, :public, :user_specific_prompts)
   end
 
-  def set_current_user
-    @current_user = current_devise_api_token.resource_owner
+  def formatted_user_prompt
+    lyric = params[:lyric]
+    <<~PROMPT.strip
+      Title: #{lyric[:title]}
+      Genre: #{lyric[:genre]}
+      Mood: #{lyric[:mood]}
+      User Specific Prompts: #{lyric[:user_specific_prompts]}
+    PROMPT
+  end
+
+  def system_prompt
+    <<~PROMPT.strip
+      You are a helpful songwriting assistant. When a user provides details, generate lyrics and return only a JSON object with keys: title, genre, mood, and lyrics. Never change the title, mood, or genre. You may correct minor spelling and capitalize the title's words.
+    PROMPT
   end
 end
