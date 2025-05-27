@@ -3,35 +3,54 @@ require "uri"
 require "json"
 
 class LyricGeneratorService
-  def initialize(prompt)
-    @prompt = prompt.presence || "Write song lyrics."
+  BASE_URL = ENV["DEEPSEEK_BASE_URL"]
+  API_KEY = ENV["DEEPSEEK_API_KEY"]
+  MODEL = "deepseek-chat"
+
+  def initialize(user_prompt:, system_prompt:)
+    @user_prompt = user_prompt
+    @system_prompt = system_prompt
   end
 
-  def call
-    uri = URI("#{ENV['DEEPSEEK_BASE_URL']}/chat/completions")
+  def generate
+    response = post_request
+    return nil unless response["choices"].present?
+
+    raw_content = response["choices"][0]["message"]["content"]
+    parsed_json = parse_json_content(raw_content)
+    parsed_json
+  rescue => e
+    Rails.logger.error("LyricsGeneratorService Error: #{e.message}")
+    nil
+  end
+
+  private
+
+  def post_request
+    uri = URI("#{BASE_URL}/chat/completions")
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
 
     headers = {
       "Content-Type" => "application/json",
-      "Authorization" => "Bearer #{ENV['DEEPSEEK_API_KEY']}"
+      "Authorization" => "Bearer #{API_KEY}"
     }
 
     body = {
-      model: "deepseek-chat",
+      model: MODEL,
       messages: [
-        { role: "system", content: "You are a helpful songwriting assistant. When a user provides details, you generate lyrics and return only a JSON object with the keys: title, genre, mood, and lyrics. Do not return anything else and don't change the title, mood, or genre! If there are minor wrong spelling, correct them but never change the title! You can capitalize the first letter of each word of the title but never change the title!" },
-        { role: "user", content: @prompt }
+        { role: "system", content: @system_prompt },
+        { role: "user", content: @user_prompt }
       ],
       stream: false
     }
 
     response = http.post(uri.path, body.to_json, headers)
-    parsed = JSON.parse(response.body)
+    JSON.parse(response.body)
+  end
 
-    parsed.dig("choices", 0, "message", "content")
-  rescue => e
-    Rails.logger.error("LyricGeneratorService Error: #{e.message}")
-    nil
+  def parse_json_content(content)
+    cleaned = content.gsub(/\A```json\s*|\s*```\z/, "")
+    JSON.parse(cleaned)
   end
 end
