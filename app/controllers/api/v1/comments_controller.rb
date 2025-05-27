@@ -1,9 +1,8 @@
 class Api::V1::CommentsController < ApplicationController
   before_action :authenticate_devise_api_token!
   before_action :set_current_user
-
   before_action :set_lyric
-  before_action :set_comment, only: [:show, :update, :destroy]
+  before_action :set_comment, only: [ :show, :update, :destroy ]
 
   def index
     @comments = @lyric.comments
