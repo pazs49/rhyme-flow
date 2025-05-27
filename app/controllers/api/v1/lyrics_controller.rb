@@ -1,7 +1,3 @@
-require "net/http"
-require "uri"
-require "json"
-
 class Api::V1::LyricsController < ApplicationController
   before_action :authenticate_devise_api_token!
   before_action :set_current_user
@@ -9,6 +5,11 @@ class Api::V1::LyricsController < ApplicationController
   def index
     @lyrics = Lyric.all
     render json: @lyrics
+  end
+
+  def show
+    @lyric = @current_user.lyrics.find_by(id: params[:id])
+    @lyric ? render(json: @lyric) : render(json: { error: "Lyric not found" }, status: :not_found)
   end
 
   def empty
@@ -30,68 +31,17 @@ class Api::V1::LyricsController < ApplicationController
     render json: dummy_lyrics
   end
 
-  def test_api
-    url = ENV["DEEPSEEK_BASE_URL"] + "/chat/completions"
-    uri = URI(url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
-
-    headers = {
-      "Content-Type" => "application/json",
-      "Authorization" => "Bearer #{ENV["DEEPSEEK_API_KEY"]}"
-    }
-
-    body = {
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: "You are a helpful songwriter." },
-        { role: "user", content: "Please generate lyrics for a song about love." }
-      ],
-      stream: false
-    }
-
-    response = http.post(uri.path, body.to_json, headers)
-    render json: response.body
-  end
-
   def generate_lyric
-    url = ENV["DEEPSEEK_BASE_URL"] + "/chat/completions"
-    uri = URI(url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
+    generated_lyrics = LyricGeneratorService.new(params[:user_specific_prompts]).call
 
-    headers = {
-      "Content-Type" => "application/json",
-      "Authorization" => "Bearer #{ENV["DEEPSEEK_API_KEY"]}"
-    }
-
-    user_prompt = params[:user_specific_prompts].presence || "Write song lyrics."
-
-    messages = [
-      { role: "system", content: "You are a helpful songwriter." },
-      { role: "user", content: user_prompt }
-    ]
-
-    body = {
-      model: "deepseek-chat",
-      messages: messages,
-      stream: false
-    }
-
-    response = http.post(uri.path, body.to_json, headers)
-    parsed_response = JSON.parse(response.body)
-
-    if parsed_response["choices"].present?
-      generated_lyrics = parsed_response["choices"][0]["message"]["content"]
-
-      @lyric = Lyric.new(
+    if generated_lyrics
+      @lyric = @current_user.lyrics.build(
         title: params[:title],
         genre: params[:genre],
         mood: params[:mood],
         body: generated_lyrics,
         public: params[:public],
-        user_id: @current_user.id,
-        user_specific_prompts: user_prompt
+        user_specific_prompts: params[:user_specific_prompts]
       )
 
       if @lyric.save
@@ -104,36 +54,23 @@ class Api::V1::LyricsController < ApplicationController
     end
   end
 
-  def show
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
+  def update
+    @lyric = @current_user.lyrics.find_by(id: params[:id])
+    return render(json: { error: "Lyric not found" }, status: :not_found) unless @lyric
+
+    if @lyric.update(lyric_params)
       render json: @lyric
     else
-      render json: { error: "Lyric not found" }, status: :not_found
-    end
-  end
-
-  def update
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
-      if @lyric.update(lyric_params)
-        render json: @lyric
-      else
-        render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
-      end
-    else
-      render json: { error: "Lyric not found" }, status: :not_found
+      render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   def destroy
-    @lyric = Lyric.find_by(id: params[:id], user_id: @current_user.id)
-    if @lyric
-      @lyric.destroy
-      render json: { message: "Lyric deleted successfully" }
-    else
-      render json: { error: "Lyric not found" }, status: :not_found
-    end
+    @lyric = @current_user.lyrics.find_by(id: params[:id])
+    return render(json: { error: "Lyric not found" }, status: :not_found) unless @lyric
+
+    @lyric.destroy
+    render json: { message: "Lyric deleted successfully" }
   end
 
   private
