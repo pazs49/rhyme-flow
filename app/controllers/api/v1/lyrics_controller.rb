@@ -7,8 +7,19 @@ class Api::V1::LyricsController < ApplicationController
   before_action :set_current_user
 
   def index
-    @lyrics = Lyric.all
-    render json: @lyrics
+    @lyrics = Lyric.where(public: true).includes(:user, :likers, comments: :user)
+    render json: @lyrics.as_json(
+      include: {
+        user: { only: [ :id, :email ] },
+        likers: { only: [ :id, :email ] },
+        comments: {
+          only: [ :id, :body, :created_at ],
+          include: {
+            user: { only: [ :id, :email ] }
+          }
+        }
+      }
+    )
   end
 
   def user_lyrics
@@ -108,7 +119,7 @@ class Api::V1::LyricsController < ApplicationController
         body: generated_lyrics["lyrics"],
         genre: generated_lyrics["genre"],
         mood: generated_lyrics["mood"],
-        public: true,
+        public: generated_lyrics["public"],
         user_id: @current_user.id
       )
 

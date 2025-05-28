@@ -9,16 +9,18 @@ class Api::V1::LikesController < ApplicationController
       return render json: { error: "You can only like public lyrics." }, status: :forbidden
     end
 
-    if lyric.user_id == @current_user.id
-      return render json: { error: "You cannot like your own lyrics." }, status: :forbidden
-    end
+    existing_like = @current_user.likes.find_by(lyric: lyric)
 
-    like = @current_user.likes.build(lyric: lyric)
-
-    if like.save
-      render json: { message: "Lyric liked!" }, status: :created
+    if existing_like
+      existing_like.destroy
+      render json: { message: "Lyric unliked!" }, status: :ok
     else
-      render json: { errors: like.errors.full_messages }, status: :unprocessable_entity
+      like = @current_user.likes.build(lyric: lyric)
+      if like.save
+        render json: { message: "Lyric liked!" }, status: :created
+      else
+        render json: { errors: like.errors.full_messages }, status: :unprocessable_entity
+      end
     end
   end
 
