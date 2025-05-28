@@ -66,7 +66,7 @@ class Api::V1::LyricsController < ApplicationController
         body: generated["lyrics"],
         genre: generated["genre"],
         mood: generated["mood"],
-        public: generated["public"]
+        public: generated["public"],
       )
 
       if @lyric.save
@@ -113,13 +113,14 @@ class Api::V1::LyricsController < ApplicationController
       Title: #{lyric[:title]}
       Genre: #{lyric[:genre]}
       Mood: #{lyric[:mood]}
+      Public: #{lyric[:public]}
       User Specific Prompts: #{lyric[:user_specific_prompts]}
     PROMPT
   end
 
   def system_prompt
     <<~PROMPT.strip
-      You are a helpful songwriting assistant. When a user provides details, generate lyrics and return only a JSON object with keys: title, genre, mood, and lyrics. Never change the title, mood, or genre. You may correct minor spelling and capitalize the title's words.
+      You are a helpful songwriting assistant. When a user provides details, generate lyrics and return only a JSON object with keys: title, genre, public, mood, and lyrics. Never change the title, mood, or genre. You may correct minor spelling and capitalize the title's words.
     PROMPT
   end
 end
