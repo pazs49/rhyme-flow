@@ -4,7 +4,20 @@ class Api::V1::LyricsController < ApplicationController
   before_action :set_lyric, only: [ :show, :update, :destroy ]
 
   def index
-    render json: Lyric.all
+    # render json: Lyric.all
+    @lyrics = Lyric.where(public: true).includes(:user, :likers, comments: :user)
+    render json: @lyrics.as_json(
+      include: {
+        user: { only: [ :id, :email ] },
+        likers: { only: [ :id, :email ] },
+        comments: {
+          only: [ :id, :body, :created_at ],
+          include: {
+            user: { only: [ :id, :email ] }
+          }
+        }
+      }
+    )
   end
 
   def show
@@ -53,7 +66,7 @@ class Api::V1::LyricsController < ApplicationController
         body: generated["lyrics"],
         genre: generated["genre"],
         mood: generated["mood"],
-        public: true
+        public: generated["public"]
       )
 
       if @lyric.save
