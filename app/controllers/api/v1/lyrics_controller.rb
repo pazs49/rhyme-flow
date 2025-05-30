@@ -25,9 +25,14 @@ class Api::V1::LyricsController < ApplicationController
 
     render json: {
       data: lyrics.as_json(include: {
-        user: { only: [ :email ] },
-        comments: {},
-        likers: {}
+        user: { only: [ :id, :email ] },
+        likers: { only: [ :id, :email ] },
+        comments: {
+          only: [ :id, :body, :created_at ],
+          include: {
+            user: { only: [ :id, :email ] }
+          }
+        }
       }),
       meta: {
         current_page: lyrics.current_page,
