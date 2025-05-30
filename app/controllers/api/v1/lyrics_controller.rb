@@ -1,11 +1,10 @@
 class Api::V1::LyricsController < ApplicationController
   before_action :authenticate_devise_api_token!
   before_action :set_current_user
-  before_action :set_lyric, only: [ :show, :update, :destroy ]
+  before_action :set_lyric, only: [ :show, :update, :destroy, :trash ]
 
   def index
-    # render json: Lyric.all
-    @lyrics = Lyric.where(public: true).includes(:user, :likers, comments: :user)
+    @lyrics = Lyric.where(public: true, trashed: [ false, nil ]).includes(:user, :likers, comments: :user)
     render json: @lyrics.as_json(
       include: {
         user: { only: [ :id, :email ] },
@@ -25,7 +24,7 @@ class Api::V1::LyricsController < ApplicationController
   end
 
   def user_lyrics
-    lyrics = @current_user.lyrics.includes(:user, :likers, comments: :user)
+    lyrics = @current_user.lyrics.not_trashed.includes(:user, :likers, comments: :user)
     render json: lyrics.as_json(include: {
       user: { only: [ :id, :email ] },
       likers: { only: [ :id, :email ] },
@@ -82,6 +81,7 @@ class Api::V1::LyricsController < ApplicationController
   def update
     if @lyric.update(lyric_params)
       render json: @lyric
+      # binding.pry
     else
       render json: { errors: @lyric.errors.full_messages }, status: :unprocessable_entity
     end
@@ -90,6 +90,32 @@ class Api::V1::LyricsController < ApplicationController
   def destroy
     @lyric.destroy
     render json: { message: "Lyric deleted successfully" }
+  end
+
+  def trash
+    if @lyric.trashed
+      @lyric.update(trashed: false)
+      render json: { message: "Lyric restored from trash" }
+    else
+      @lyric.update(trashed: true)
+      render json: { message: "Lyric moved to trash" }
+    end
+  end
+
+  def get_trashed_lyrics
+    @lyrics = @current_user.lyrics.trashed
+    render json: @lyrics.as_json(
+      include: {
+        user: { only: [ :id, :email ] },
+        likers: { only: [ :id, :email ] },
+        comments: {
+          only: [ :id, :body, :created_at ],
+          include: {
+            user: { only: [ :id, :email ] }
+          }
+        }
+      }
+    )
   end
 
   private
@@ -104,7 +130,7 @@ class Api::V1::LyricsController < ApplicationController
   end
 
   def lyric_params
-    params.require(:lyric).permit(:title, :genre, :mood, :public, :user_specific_prompts)
+    params.require(:lyric).permit(:title, :genre, :mood, :public, :user_specific_prompts, :body)
   end
 
   def formatted_user_prompt
