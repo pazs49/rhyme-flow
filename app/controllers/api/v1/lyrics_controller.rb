@@ -4,19 +4,38 @@ class Api::V1::LyricsController < ApplicationController
   before_action :set_lyric, only: [ :show, :update, :destroy, :trash ]
 
   def index
-    @lyrics = Lyric.where(public: true, trashed: [ false, nil ]).includes(:user, :likers, comments: :user)
-    render json: @lyrics.as_json(
-      include: {
-        user: { only: [ :id, :email ] },
-        likers: { only: [ :id, :email ] },
-        comments: {
-          only: [ :id, :body, :created_at ],
-          include: {
-            user: { only: [ :id, :email ] }
-          }
-        }
+    # @lyrics = Lyric.where(public: true, trashed: [ false, nil ]).includes(:user, :likers, comments: :user)
+    # render json: @lyrics.as_json(
+    #   include: {
+    #     user: { only: [ :id, :email ] },
+    #     likers: { only: [ :id, :email ] },
+    #     comments: {
+    #       only: [ :id, :body, :created_at ],
+    #       include: {
+    #         user: { only: [ :id, :email ] }
+    #       }
+    #     }
+    #   }
+    # )
+
+    page = params[:page] || 1
+    per_page = params[:per_page] || 10
+
+    lyrics = Lyric.where(public: true, trashed: [ false, nil ]).includes(:user, :likers, comments: :user).order(created_at: :desc).page(page).per(per_page)
+
+    render json: {
+      data: lyrics.as_json(include: {
+        user: { only: [ :email ] },
+        comments: {},
+        likers: {}
+      }),
+      meta: {
+        current_page: lyrics.current_page,
+        total_pages: lyrics.total_pages,
+        total_count: lyrics.total_count,
+        per_page: lyrics.limit_value
       }
-    )
+    }
   end
 
   def show
