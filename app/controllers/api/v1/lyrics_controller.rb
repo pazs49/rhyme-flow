@@ -43,7 +43,7 @@ class Api::V1::LyricsController < ApplicationController
   end
 
   def user_lyrics
-    lyrics = @current_user.lyrics.not_trashed.includes(:user, :likers, comments: :user)
+    lyrics = @current_user.lyrics.not_trashed.includes(:user, :likers, comments: :user).order(created_at: :desc)
     render json: lyrics.as_json(include: {
       user: { only: [ :id, :email ] },
       likers: { only: [ :id, :email ] },
